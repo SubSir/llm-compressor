@@ -72,18 +72,18 @@ _moe_default_mappings = [
 _qwen3_5_mappings = [
     # Full-attention projections
     AWQMapping(
-        "re:.*layers\.(3|7|11|15|19|23)\.input_layernorm$",
-        ["re:.*self_attn.q_proj$", "re:.*self_attn.k_proj$", "re:.*self_attn.v_proj$"],
+        r"re:.*layers\.(3|7|11|15|19|23)\.input_layernorm$",
+        [r"re:.*self_attn.q_proj$", r"re:.*self_attn.k_proj$", r"re:.*self_attn.v_proj$"],
     ),
-    AWQMapping("re:.*self_attn.v_proj$", ["re:.*self_attn.o_proj$"]),
+    AWQMapping(r"re:.*self_attn.v_proj$", [r"re:.*self_attn.o_proj$"]),
     # Linear-attention (Gated DeltaNet) projections
     AWQMapping(
-        "re:.*layers\.(0|1|2|4|5|6|8|9|10|12|13|14|16|17|18|20|21|22)\.input_layernorm$",
+        r"re:.*layers\.(0|1|2|4|5|6|8|9|10|12|13|14|16|17|18|20|21|22)\.input_layernorm$",
         [
-            "re:.*linear_attn.in_proj_qkv$",
-            "re:.*linear_attn.in_proj_z$",
-            "re:.*linear_attn.in_proj_b$",
-            "re:.*linear_attn.in_proj_a$",
+            r"re:.*linear_attn.in_proj_qkv$",
+            r"re:.*linear_attn.in_proj_z$",
+            r"re:.*linear_attn.in_proj_b$",
+            r"re:.*linear_attn.in_proj_a$",
         ],
     ),
     # MLP projections
@@ -94,6 +94,39 @@ _qwen3_5_mappings = [
     AWQMapping("re:.*up_proj$", ["re:.*down_proj$"]),
 ]
 
+# Qwen3.5 MoE (e.g. 35B-A3B) uses hybrid attention with full-attention at
+# layers 3,7,11,... and linear-attention on the rest (for 40 layers, ending at 39).
+# MLP is MoE with experts + shared_expert paths.
+_qwen3_5_moe_mappings = [
+    # Full-attention projections
+    AWQMapping(
+        r"re:.*layers\.(3|7|11|15|19|23|27|31|35|39)\.input_layernorm$",
+        [r"re:.*self_attn.q_proj$", r"re:.*self_attn.k_proj$", r"re:.*self_attn.v_proj$"],
+    ),
+    # NOTE: intentionally not adding v_proj -> o_proj mapping because with GQA
+    # (num_attention_heads != num_key_value_heads) this is typically shape-incompatible.
+    AWQMapping(r"re:.*self_attn.v_proj$", [r"re:.*self_attn.o_proj$"]),
+    # Linear-attention (Gated DeltaNet) projections
+    AWQMapping(
+        r"re:.*layers\.(0|1|2|4|5|6|8|9|10|12|13|14|16|17|18|20|21|22|24|25|26|28|29|30|32|33|34|36|37|38)\.input_layernorm$",
+        [
+            r"re:.*linear_attn.in_proj_qkvz$",
+            r"re:.*linear_attn.in_proj_ba$",
+        ],
+    ),
+    # MLP projections
+    AWQMapping(
+        r"re:.*post_attention_layernorm$",
+        [
+            r"re:.*mlp.experts.*.gate_proj$",
+            r"re:.*mlp.experts.*.up_proj$",
+            r"re:.*mlp.shared_expert.gate_proj$",
+            r"re:.*mlp.shared_expert.up_proj$",
+        ],
+    ),
+    AWQMapping(r"re:.*up_proj$", [r"re:.*down_proj$"]),
+]
+
 # Qwen3Next uses hybrid attention: self_attn (layers 3,7,11,...) and
 # linear_attn/Gated DeltaNet (all other layers). Layer-specific patterns
 # are required since different layers have different projection structures.
@@ -102,25 +135,28 @@ _qwen3_5_mappings = [
 # interval=4, starting at layer 3). The interval is a configurable parameter in the
 # model config (full_attention_layer_interval). Consider making this dynamic.
 _qwen3_next_moe_mappings = [
+    # Full-attention projections
     AWQMapping(
-        "re:.*layers\\.(3|7|11|15|19|23|27|31|35|39|43|47)\\.input_layernorm$",
-        ["re:.*self_attn.q_proj$", "re:.*self_attn.k_proj$", "re:.*self_attn.v_proj$"],
+        r"re:.*layers\.(3|7|11|15|19|23|27|31|35|39|43|47)\.input_layernorm$",
+        [r"re:.*self_attn.q_proj$", r"re:.*self_attn.k_proj$", r"re:.*self_attn.v_proj$"],
     ),
-    AWQMapping("re:.*self_attn.v_proj$", ["re:.*self_attn.o_proj$"]),
+    AWQMapping(r"re:.*self_attn.v_proj$", [r"re:.*self_attn.o_proj$"]),
+    # Linear-attention (Gated DeltaNet) projections
     AWQMapping(
-        "re:.*layers\\.(0|1|2|4|5|6|8|9|10|12|13|14|16|17|18|20|21|22|24|25|26|28|29|30|32|33|34|36|37|38|40|41|42|44|45|46)\\.input_layernorm$",
-        ["re:.*linear_attn.in_proj_qkvz$", "re:.*linear_attn.in_proj_ba$"],
+        r"re:.*layers\.(0|1|2|4|5|6|8|9|10|12|13|14|16|17|18|20|21|22|24|25|26|28|29|30|32|33|34|36|37|38|40|41|42|44|45|46)\.input_layernorm$",
+        [r"re:.*linear_attn.in_proj_qkvz$", r"re:.*linear_attn.in_proj_ba$"],
     ),
+    # MLP projections
     AWQMapping(
-        "re:.*post_attention_layernorm$",
+        r"re:.*post_attention_layernorm$",
         [
-            "re:.*mlp.experts.*.gate_proj$",
-            "re:.*mlp.experts.*.up_proj$",
-            "re:.*mlp.shared_expert.gate_proj$",
-            "re:.*mlp.shared_expert.up_proj$",
+            r"re:.*mlp.experts.*.gate_proj$",
+            r"re:.*mlp.experts.*.up_proj$",
+            r"re:.*mlp.shared_expert.gate_proj$",
+            r"re:.*mlp.shared_expert.up_proj$",
         ],
     ),
-    AWQMapping("re:.*up_proj$", ["re:.*down_proj$"]),
+    AWQMapping(r"re:.*up_proj$", [r"re:.*down_proj$"]),
 ]
 
 # Phi merges
@@ -294,6 +330,8 @@ AWQ_MAPPING_REGISTRY: dict[str, list[AWQMapping]] = {
     "Qwen3MoeForCausalLM": _moe_default_mappings,
     "Qwen3_5ForCausalLM": _qwen3_5_mappings,
     "Qwen3_5ForConditionalGeneration": _qwen3_5_mappings,
+    "Qwen3_5MoeForCausalLM": _qwen3_5_moe_mappings,
+    "Qwen3_5MoeForConditionalGeneration": _qwen3_5_moe_mappings,
     "Qwen3NextForCausalLM": _qwen3_next_moe_mappings,
     "Glm4MoeForCausalLM": _default_mappings,
     "SeedOssForCausalLM": _default_mappings,
