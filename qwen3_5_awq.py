@@ -3,12 +3,10 @@ from huggingface_hub import HfApi
 
 from compressed_tensors.offload import dispatch_model
 from datasets import load_dataset
-from transformers import AutoTokenizer
-from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5ForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from llmcompressor import oneshot
 from llmcompressor.modifiers.awq import AWQModifier
-
 
 def main(model_name: str = "Qwen/Qwen3.5-30B-A3B"):
     """
@@ -23,12 +21,12 @@ def main(model_name: str = "Qwen/Qwen3.5-30B-A3B"):
 
     # Select number of samples. 256 samples is a good place to start.
     # Increasing the number of samples can improve accuracy.
-    NUM_CALIBRATION_SAMPLES = 256
+    NUM_CALIBRATION_SAMPLES = 1
     MAX_SEQUENCE_LENGTH = 512
 
     # Select model and load it.
     print(f"Loading model: {model_name}")
-    model = Qwen3_5ForCausalLM.from_pretrained(model_name, dtype="auto")
+    model = AutoModelForCausalLM.from_pretrained(model_name, dtype="auto")
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
 
     # Load dataset and preprocess.
@@ -79,7 +77,7 @@ def main(model_name: str = "Qwen/Qwen3.5-30B-A3B"):
   
     quantized_layers = get_quantized_layers(model)  
     for name, module in quantized_layers:  
-        print(f"Quantized: {name}")
+        print(f"Quantized: {name} {module}")
 
     # Confirm generations of the quantized model look sane.
     print("\n\n")
@@ -122,7 +120,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model-name",
         type=str,
-        default="Qwen/Qwen3.5-0.8B",
+        default="Qwen/Qwen3.5-2B",
         help="HuggingFace model name to quantize"
     )
     args = parser.parse_args()

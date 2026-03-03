@@ -344,20 +344,46 @@ def _graft_extra_weights(model: PreTrainedModel, save_directory: str) -> None:
     # Keys missing from the output fall into two categories:
     #   a) Truly dropped by transformers (e.g. mtp.* keys) — the parent
     #      module was never created, so it doesn't exist in the model.
-    #   b) Renamed by compression (e.g. weight → weight_packed) — the
-    #      parent module still exists, just with different parameter names.
+    #   b) Renamed by compression or architecture wrappers (e.g.
+    #      model.language_model.* -> model.*; weight -> weight_packed).
     # We only want category (a).
+
+    def _canonicalize_key(key: str) -> str:
+        # Common wrapper path rewrite for CausalLM heads:
+        #   source: model.language_model.layers.*
+        #   model : model.layers.*
+        if key.startswith("model.language_model."):
+            return "model." + key[len("model.language_model.") :]
+        return key
+
     candidate_keys = set(source_weight_map.keys()) - output_keys
     if not candidate_keys:
         return
 
+    # If a missing source key canonically matches an existing output key,
+    # it's a rename/path-rewrite case and should not be grafted.
+    canonical_output_keys = {_canonicalize_key(k) for k in output_keys}
+    candidate_keys = {
+        key for key in candidate_keys if _canonicalize_key(key) not in canonical_output_keys
+    }
+    if not candidate_keys:
+        return
+
     model_module_names = {name for name, _ in model.named_modules()}
+    canonical_model_module_names = {
+        _canonicalize_key(name) for name in model_module_names
+    }
 
     extra_keys = set()
     for key in candidate_keys:
-        # Extract parent module path: "a.b.c.weight" → "a.b.c"
+        # Extract parent module path: "a.b.c.weight" -> "a.b.c"
         module_path = key.rsplit(".", 1)[0] if "." in key else ""
-        if module_path not in model_module_names:
+        canonical_module_path = _canonicalize_key(module_path)
+        if (
+            module_path not in model_module_names
+            and canonical_module_path not in model_module_names
+            and canonical_module_path not in canonical_model_module_names
+        ):
             extra_keys.add(key)
 
     if not extra_keys:
