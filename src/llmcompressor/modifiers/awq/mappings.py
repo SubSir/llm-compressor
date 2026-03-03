@@ -65,6 +65,35 @@ _moe_default_mappings = [
     ),
 ]
 
+# Qwen3.5-0.8B uses hybrid attention with full attention at layers
+# 3,7,11,15,19,23 and linear attention on all remaining layers.
+# We scope smooth_layer by layer index so each mapping resolves to a single
+# smooth layer path in AWQ's resolver.
+_qwen3_5_mappings = [
+    # Full-attention projections
+    AWQMapping(
+        "re:.*layers\.(3|7|11|15|19|23)\.input_layernorm$",
+        ["re:.*self_attn.q_proj$", "re:.*self_attn.k_proj$", "re:.*self_attn.v_proj$"],
+    ),
+    AWQMapping("re:.*self_attn.v_proj$", ["re:.*self_attn.o_proj$"]),
+    # Linear-attention (Gated DeltaNet) projections
+    AWQMapping(
+        "re:.*layers\.(0|1|2|4|5|6|8|9|10|12|13|14|16|17|18|20|21|22)\.input_layernorm$",
+        [
+            "re:.*linear_attn.in_proj_qkv$",
+            "re:.*linear_attn.in_proj_z$",
+            "re:.*linear_attn.in_proj_b$",
+            "re:.*linear_attn.in_proj_a$",
+        ],
+    ),
+    # MLP projections
+    AWQMapping(
+        "re:.*post_attention_layernorm$",
+        ["re:.*mlp.gate_proj$", "re:.*mlp.up_proj$"],
+    ),
+    AWQMapping("re:.*up_proj$", ["re:.*down_proj$"]),
+]
+
 # Qwen3Next uses hybrid attention: self_attn (layers 3,7,11,...) and
 # linear_attn/Gated DeltaNet (all other layers). Layer-specific patterns
 # are required since different layers have different projection structures.
@@ -263,6 +292,8 @@ AWQ_MAPPING_REGISTRY: dict[str, list[AWQMapping]] = {
     "Qwen2MoeForCausalLM": _moe_default_mappings,
     "Qwen3ForCausalLM": _default_mappings,
     "Qwen3MoeForCausalLM": _moe_default_mappings,
+    "Qwen3_5ForCausalLM": _qwen3_5_mappings,
+    "Qwen3_5ForConditionalGeneration": _qwen3_5_mappings,
     "Qwen3NextForCausalLM": _qwen3_next_moe_mappings,
     "Glm4MoeForCausalLM": _default_mappings,
     "SeedOssForCausalLM": _default_mappings,
