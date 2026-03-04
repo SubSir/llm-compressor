@@ -571,11 +571,27 @@ class AWQModifier(Modifier, QuantizationMixin):
                         )
                     elif module == smooth_layer:
                         if module.weight.ndim == 1:
-                            update_offload_parameter(
-                                module,
-                                "weight",
-                                module.weight.div_(scales),
-                            )
+                            # Qwen RMSNorm family uses output = norm(x) * (1 + weight),
+                            # so to apply smoothing (divide smooth output by `scales`),
+                            # we need: (1 + w') = (1 + w) / s  =>  w' = (1 + w) / s - 1.
+                            if (
+                                "qwen" in module.__class__.__name__.lower()
+                                and "rmsnorm" in module.__class__.__name__.lower()
+                            ):
+                                qwen_weight = (
+                                    (module.weight.float() + 1.0) / scales.float()
+                                ) - 1.0
+                                update_offload_parameter(
+                                    module,
+                                    "weight",
+                                    qwen_weight.to(module.weight.dtype),
+                                )
+                            else:
+                                update_offload_parameter(
+                                    module,
+                                    "weight",
+                                    module.weight.div_(scales),
+                                )
                         else:
                             # NOTE: edge case when smooth layer number of out_features
                             # is not equal to balance layer number of in_features
