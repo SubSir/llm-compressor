@@ -110,8 +110,10 @@ _qwen3_5_moe_mappings = [
     AWQMapping(
         r"re:.*layers\.(0|1|2|4|5|6|8|9|10|12|13|14|16|17|18|20|21|22|24|25|26|28|29|30|32|33|34|36|37|38|40|41|42|44|45|46|48|49|50|52|53|54|56|57|58|60|61|62)\.input_layernorm$",
         [
-            r"re:.*linear_attn.in_proj_qkvz$",
-            r"re:.*linear_attn.in_proj_ba$",
+            r"re:.*linear_attn.in_proj_qkv$",
+            r"re:.*linear_attn.in_proj_z$",
+            r"re:.*linear_attn.in_proj_b$",
+            r"re:.*linear_attn.in_proj_a$",
         ],
     ),
     # MLP projections
