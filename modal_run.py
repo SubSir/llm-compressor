@@ -23,6 +23,21 @@ def _quantized_dir(model_name: str) -> str:
     return f"{model_suffix}-awq-asym-fake"
 
 
+def _run_and_stream(cmd: list[str], cwd: Path) -> int:
+    process = subprocess.Popen(
+        cmd,
+        cwd=cwd,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=1,
+    )
+    if process.stdout is not None:
+        for line in iter(process.stdout.readline, ""):
+            print(line, end="")
+    return process.wait()
+
+
 @app.function(
     gpu="H200",
     timeout=7200,
@@ -43,13 +58,9 @@ def run_quant_and_eval(
         "--model-name",
         model_name,
     ]
-    quant_proc = subprocess.run(
-        quant_cmd,
-        cwd=repo_dir,
-        text=True,
-        capture_output=True,
-        check=True,
-    )
+    quant_exit_code = _run_and_stream(quant_cmd, repo_dir)
+    if quant_exit_code != 0:
+        raise RuntimeError(f"Quantization failed with code {quant_exit_code}")
 
     quant_dir = _quantized_dir(model_name)
     eval_cmd = [
@@ -62,20 +73,12 @@ def run_quant_and_eval(
         "--seed",
         str(seed),
     ]
-    eval_proc = subprocess.run(
-        eval_cmd,
-        cwd=repo_dir,
-        text=True,
-        capture_output=True,
-        check=True,
-    )
+    eval_exit_code = _run_and_stream(eval_cmd, repo_dir)
+    if eval_exit_code != 0:
+        raise RuntimeError(f"Evaluation failed with code {eval_exit_code}")
 
     return {
         "quant_dir": quant_dir,
-        "quant_stdout": quant_proc.stdout,
-        "quant_stderr": quant_proc.stderr,
-        "eval_stdout": eval_proc.stdout,
-        "eval_stderr": eval_proc.stderr,
     }
 
 
@@ -92,16 +95,3 @@ def main(
     )
 
     print("Quantized model dir:", result["quant_dir"])
-    if result["quant_stdout"]:
-        print("\n=== Quantization stdout ===\n")
-        print(result["quant_stdout"])
-    if result["quant_stderr"]:
-        print("\n=== Quantization stderr ===\n")
-        print(result["quant_stderr"])
-
-    if result["eval_stdout"]:
-        print("\n=== Evaluation stdout ===\n")
-        print(result["eval_stdout"])
-    if result["eval_stderr"]:
-        print("\n=== Evaluation stderr ===\n")
-        print(result["eval_stderr"])
