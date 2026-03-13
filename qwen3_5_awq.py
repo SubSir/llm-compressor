@@ -21,7 +21,7 @@ def main(model_name: str = "Qwen/Qwen3.5-30B-A3B"):
 
     # Select number of samples. 256 samples is a good place to start.
     # Increasing the number of samples can improve accuracy.
-    NUM_CALIBRATION_SAMPLES = 128
+    NUM_CALIBRATION_SAMPLES = 256
     MAX_SEQUENCE_LENGTH = 512
 
     # Select model and load it.
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model-name",
         type=str,
-        default="Qwen/Qwen3.5-0.8B",
+        default="Qwen/Qwen3.5-0.8B-Base",
         help="HuggingFace model name to quantize"
     )
     args = parser.parse_args()
