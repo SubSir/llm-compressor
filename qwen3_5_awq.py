@@ -16,12 +16,12 @@ def main(model_name: str = "Qwen/Qwen3.5-30B-A3B"):
         model_name: HuggingFace model name to quantize
     """
     # Select calibration dataset.
-    DATASET_ID = "HuggingFaceH4/ultrachat_200k"
-    DATASET_SPLIT = "train_sft"
+    DATASET_ID = "mit-han-lab/pile-val-backup"
+    DATASET_SPLIT = "validation"
 
     # Select number of samples. 256 samples is a good place to start.
     # Increasing the number of samples can improve accuracy.
-    NUM_CALIBRATION_SAMPLES = 1
+    NUM_CALIBRATION_SAMPLES = 128
     MAX_SEQUENCE_LENGTH = 512
 
     # Select model and load it.
@@ -34,12 +34,14 @@ def main(model_name: str = "Qwen/Qwen3.5-30B-A3B"):
     ds = ds.shuffle(seed=42)
 
     def preprocess(example):
-        return {
-            "text": tokenizer.apply_chat_template(
+        if "messages" in example:
+            text = tokenizer.apply_chat_template(
                 example["messages"],
                 tokenize=False,
             )
-        }
+        else:
+            text = example.get("text") or example.get("content") or ""
+        return {"text": text}
 
     ds = ds.map(preprocess)
 
@@ -93,48 +95,12 @@ def main(model_name: str = "Qwen/Qwen3.5-30B-A3B"):
     # Save both variants to disk: legacy fake (non-compressed) and real AWQ (compressed).
     model_suffix = model_name.rstrip("/").split("/")[-1]
     fake_save_dir = model_suffix + "-awq-asym-fake"
-    real_save_dir = model_suffix + "-awq-asym"
+    # real_save_dir = model_suffix + "-awq-asym"
 
-    import copy
     print(f"Saving fake quantized model to: {fake_save_dir}")
-    copy.deepcopy(model).save_pretrained(fake_save_dir, save_compressed=False)
+    model.save_pretrained(fake_save_dir, save_compressed=False)
     tokenizer.save_pretrained(fake_save_dir)
-
-    print(f"Saving compressed quantized model to: {real_save_dir}")
-    copy.deepcopy(model).save_pretrained(real_save_dir, save_compressed=True)
-    tokenizer.save_pretrained(real_save_dir)
-
-    # Upload both repos to HuggingFace
-    fake_repo_name = f"SubSir/{model_name.split('/')[-1]}-Fake-AWQ"
-    real_repo_name = f"SubSir/{model_name.split('/')[-1]}-AWQ"
-
-    api = HfApi()
-
-    print(f"Uploading fake model to HuggingFace: {fake_repo_name}")
-    api.create_repo(repo_id=fake_repo_name, exist_ok=True, repo_type="model")
-    api.upload_folder(
-        folder_path=fake_save_dir,
-        repo_id=fake_repo_name,
-        repo_type="model",
-    )
-    print(f"Successfully uploaded to https://huggingface.co/{fake_repo_name}")
-
-    print(f"Uploading compressed model to HuggingFace: {real_repo_name}")
-    api.create_repo(repo_id=real_repo_name, exist_ok=True, repo_type="model")
-    api.upload_folder(
-        folder_path=real_save_dir,
-        repo_id=real_repo_name,
-        repo_type="model",
-    )
-    print(f"Successfully uploaded to https://huggingface.co/{real_repo_name}")
-
-    return {
-        "fake_model_path": fake_save_dir,
-        "fake_repo_id": fake_repo_name,
-        "model_path": real_save_dir,
-        "repo_id": real_repo_name,
-    }
-
+    
 
 if __name__ == "__main__":
     import argparse
@@ -143,7 +109,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model-name",
         type=str,
-        default="Qwen/Qwen3.5-0.8B-Base",
+        default="Qwen/Qwen3.5-0.8B",
         help="HuggingFace model name to quantize"
     )
     args = parser.parse_args()

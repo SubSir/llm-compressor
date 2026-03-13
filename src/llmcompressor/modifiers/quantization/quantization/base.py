@@ -1,6 +1,6 @@
 import tqdm
 from compressed_tensors.utils import match_named_modules
-from compressed_tensors.utils.match import _match_name
+from compressed_tensors.utils.match import match_name
 from loguru import logger
 
 from llmcompressor.core import Event, EventType, State
@@ -124,7 +124,7 @@ class QuantizationModifier(Modifier, QuantizationMixin):
         if regex_patterns:
             expanded = set()
             for name, _ in state.model.named_modules():
-                if any(_match_name(name, p) for p in regex_patterns):
+                if any(match_name(name, p) for p in regex_patterns):
                     expanded.add(name)
             if expanded:
                 existing = getattr(
